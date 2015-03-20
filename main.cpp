@@ -2,11 +2,12 @@
 
 #include "src/mlog.h"
 
-int main()
-{
-    std::cout << "Hello world!" << std::endl;
+int main(){
 
-    mLog::log(1, "bla: ", 5.324, " ", 9, " dfasfasf");
+	mLog::log(MLOG_INFO, "bla: ", 5.324, " ", 9, " dfasfasf");
+	mLog::log(MLOG_ERROR, "huehuehue ", 666, " afasf");
+	mLog::log(MLOG_ERROR, "huehuehue ", 666);
+	mLog::log(MLOG_ERROR, "huehuehue ");
 
-    return 0;
+	return 0;
 }
