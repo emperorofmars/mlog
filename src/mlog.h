@@ -51,7 +51,7 @@ class mLog{
 public:
 	static mLog *Instance();
 
-	int init();
+	int init(const char *defaultFile, bool append = true);
 
 	int setOutputFile(const char *path, const char *alias, bool append = true);
 	int setLogLevel(int consoleLog, int fileLog);
@@ -120,6 +120,7 @@ mLog::mLog(){
 			<< std::endl << printTimeStamp(MLOG_DATE | MLOG_TIME)
 			<< "Logging Started" << std::endl;
 	tmp->mBuffer.push_back({std::vector<std::string>({ss.str()})});
+	tmp->mBufferLogLevel.push_back(0);
 	mOutput.push_back(std::shared_ptr<output>(tmp));
 
 	mLogLevelConsole = MLOG_ERROR_SIZE;
@@ -130,9 +131,11 @@ mLog::mLog(){
 mLog::~mLog(){
 }
 
-int mLog::init(){
+int mLog::init(const char *defaultFile, bool append){
 	mMutex.lock();
 	mInited = true;
+
+	setOutputFile(defaultFile, MLOG_DEFAULT_ALIAS, append);
 
 	for(unsigned int i = 0; i < mOutput.size(); i++){
 		for(unsigned int j = 0; j < mOutput[i]->mBuffer.size(); j++){
@@ -143,6 +146,7 @@ int mLog::init(){
 				realLog<std::string>(mOutput[i]->mBufferLogLevel[j], i, msg);
 			}
 			mOutput[i]->mBuffer.erase(mOutput[i]->mBuffer.begin() + j);
+			mOutput[i]->mBufferLogLevel.erase(mOutput[i]->mBufferLogLevel.begin() + j);
 			j--;
 		}
 	}
@@ -353,7 +357,8 @@ std::string mLog::printLogLevel(int logLevel){
 #undef LOG_D_INFO
 #undef LOG_D_TRACE
 
-#define LOG_INIT mLog::Instance()->init()
+#define LOG_ALL (*mLog::Instance())
+#define LOG_INIT mLog::Instance()->init
 
 #define LOG(level, output, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(level, output, __VA_ARGS__)
 #define LOG_D(level, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(level, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
