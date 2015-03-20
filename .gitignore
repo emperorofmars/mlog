@@ -3,3 +3,4 @@ mlog.layout
 .directory
 obj
 bin
+log.txt

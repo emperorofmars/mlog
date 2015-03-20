@@ -45,37 +45,39 @@ enum logInfo{
 	MLOG_LINE = 0b00001000,
 };
 
-//############################################################### static logging class
+//############################################################### singleton logging class
 
 class mLog{
 public:
-	static int init();
+	static mLog *Instance();
 
-	static int setOutputFile(const char *path, const char *alias, bool append = true);
-	static int setLogLevel(int consoleLog, int fileLog);
-	static int setLogLevelForFile(int fileLog, const char *alias);
-	static int setFormat(int format);
+	int init();
+
+	int setOutputFile(const char *path, const char *alias, bool append = true);
+	int setLogLevel(int consoleLog, int fileLog);
+	int setLogLevelForFile(int fileLog, const char *alias);
+	int setFormat(int format);
 
 	template<typename T, typename... Args>
-		static int log(int logLevel, const char *alias, T t, Args... args);
+		int log(int logLevel, const char *alias, T t, Args... args);
 	template<typename T>
-		static int log(int logLevel, const char *alias, T t);
+		int log(int logLevel, const char *alias, T t);
 
 private:
-	//mLog();
-	//~mLog();
-	//mLog(const mLog &) = delete;
-	//void operator =(const mLog &) = delete;
+	mLog();
+	~mLog();
+	mLog(const mLog &) = delete;
+	void operator =(const mLog &) = delete;
 
 	template<typename T, typename... Args>
-		static int realLog(int logLevel, int output, T t, Args... args);
+		int realLog(int logLevel, int output, T t, Args... args);
 	template<typename T>
-		static int realLog(int logLevel, int output, T &t);
+		int realLog(int logLevel, int output, T &t);
 
-	static int searchOutput(const char *alias);
+	int searchOutput(const char *alias);
 
-    static std::string printTimeStamp(int info);
-    static std::string printLogLevel(int logLevel);
+    std::string printTimeStamp(int info);
+    std::string printLogLevel(int logLevel);
 
 	struct output{
 		std::string mFileName;
@@ -84,40 +86,66 @@ private:
 		int mLogLevel;
 
 		std::vector<std::vector<std::string>> mBuffer;
+		std::vector<int> mBufferLogLevel;
 	};
-	static std::vector<std::shared_ptr<output>> mOutput;
+	std::vector<std::shared_ptr<output>> mOutput;
 
-	static std::mutex mMutex;
-	static int mLogLevelConsole;
-	static int mLogLevelFile;
-	static int mFormat;
+	std::mutex mMutex;
+	int mLogLevelConsole;
+	int mLogLevelFile;
+	int mFormat;
 
 	static bool mInited;
+	static mLog mInstance;
 };
 
 #ifndef MLOG_VARIABLES
 #define MLOG_VARIABLES
-	std::vector<std::shared_ptr<mLog::output>> mLog::mOutput;
-	std::mutex mLog::mMutex;
-	int mLog::mLogLevelConsole = MLOG_ERROR_SIZE;
-	int mLog::mLogLevelFile = MLOG_ERROR_SIZE;
-	int mLog::mFormat = MLOG_DATE | MLOG_TIME | MLOG_FILE | MLOG_LINE;
-
 	bool mLog::mInited = false;
+	mLog mLog::mInstance;
 #endif // MLOG_VARIABLES
 
 //############################################################### set functions
 
+mLog *mLog::Instance(){
+	return &mInstance;
+}
+
+mLog::mLog(){
+	output *tmp = new output;
+	tmp->mAlias = MLOG_DEFAULT_ALIAS;
+	tmp->mLogLevel = MLOG_ERROR_SIZE;
+	std::stringstream ss;
+	ss << "============================================================"
+			<< std::endl << printTimeStamp(MLOG_DATE | MLOG_TIME)
+			<< "Logging Started" << std::endl;
+	tmp->mBuffer.push_back({std::vector<std::string>({ss.str()})});
+	mOutput.push_back(std::shared_ptr<output>(tmp));
+
+	mLogLevelConsole = MLOG_ERROR_SIZE;
+	mLogLevelFile = MLOG_ERROR_SIZE;
+	mFormat = MLOG_DATE | MLOG_TIME | MLOG_FILE | MLOG_LINE;
+}
+
+mLog::~mLog(){
+}
+
 int mLog::init(){
 	mMutex.lock();
-/*
-	for(unsigned int i = 0; i < mBuffer.size(); i++){
-		for(unsigned int j = 0; j < mBuffer[i].size(); j++){
-			//
+	mInited = true;
+
+	for(unsigned int i = 0; i < mOutput.size(); i++){
+		for(unsigned int j = 0; j < mOutput[i]->mBuffer.size(); j++){
+			std::stringstream ss;
+			std::string msg;
+			for(unsigned int k = 0; k < mOutput[i]->mBuffer[j].size(); k++){
+				msg = mOutput[i]->mBuffer[j][k];
+				realLog<std::string>(mOutput[i]->mBufferLogLevel[j], i, msg);
+			}
+			mOutput[i]->mBuffer.erase(mOutput[i]->mBuffer.begin() + j);
+			j--;
 		}
 	}
-*/
-	mInited = true;
 	mMutex.unlock();
 	return 0;
 }
@@ -176,6 +204,11 @@ int mLog::log(int logLevel, const char *alias, T t, Args... args){
 
 	int i = searchOutput(alias);
 
+	if(!mInited){
+		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
+		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+	}
+
 	std::stringstream ss;
 	std::string msg;
 	ss << printTimeStamp(mFormat) << printLogLevel(logLevel);
@@ -199,6 +232,11 @@ int mLog::log(int logLevel, const char *alias, T t){
 	mMutex.lock();
 
 	int i = searchOutput(alias);
+
+	if(!mInited){
+		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
+		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+	}
 
 	std::stringstream ss;
 	std::string msg;
@@ -228,11 +266,22 @@ int mLog::realLog(int logLevel, int output, T t, Args... args){
 
 template<typename T>
 int mLog::realLog(int logLevel, int output, T &t){
-	if(MLOG_DISABLE_CONSOLE_LOG != 1 && logLevel <= mLogLevelConsole){
-		std::cerr << t;
+	if(mInited){
+		if(MLOG_DISABLE_CONSOLE_LOG != 1 && logLevel <= mLogLevelConsole){
+			std::cerr << t;
+		}
+		if(MLOG_DISABLE_FILE_LOG != 1 && logLevel <= mLogLevelFile && output >= 0){
+			mOutput[output]->mFile << t;
+		}
 	}
-	if(MLOG_DISABLE_FILE_LOG != 1 && logLevel <= mLogLevelFile && output >= 0){
-		mOutput[output]->mFile << t;
+	else{
+		std::stringstream ss;
+		ss << t;
+		unsigned int i;
+		i = mOutput[output]->mBuffer.size();
+		if(i > 0){
+			mOutput[output]->mBuffer[i - 1].push_back(ss.str());
+		}
 	}
 	return 0;
 }
@@ -289,6 +338,8 @@ std::string mLog::printLogLevel(int logLevel){
 
 //############################################################### macros
 
+#undef LOG_INIT
+
 #undef LOG
 #undef LOG_D
 
@@ -302,18 +353,20 @@ std::string mLog::printLogLevel(int logLevel){
 #undef LOG_D_INFO
 #undef LOG_D_TRACE
 
-#define LOG(level, output, ...) if(MLOG_DISABLE != 1) mLog::log(level, output, __VA_ARGS__)
-#define LOG_D(level, ...) if(MLOG_DISABLE != 1) mLog::log(level, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
+#define LOG_INIT mLog::Instance()->init()
 
-#define LOG_ERROR(output, ...) if(MLOG_DISABLE != 1) mLog::log(MLOG_ERROR, output, __VA_ARGS__)
-#define LOG_WARNING(output, ...) if(MLOG_DISABLE != 1) mLog::log(MLOG_WARNING, output, __VA_ARGS__)
-#define LOG_INFO(output, ...) if(MLOG_DISABLE != 1) mLog::log(MLOG_INFO, output, __VA_ARGS__)
-#define LOG_TRACE(output, ...) if(MLOG_DISABLE != 1) mLog::log(MLOG_TRACE, output, __VA_ARGS__)
+#define LOG(level, output, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(level, output, __VA_ARGS__)
+#define LOG_D(level, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(level, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
 
-#define LOG_D_ERROR(...) if(MLOG_DISABLE != 1) mLog::log(MLOG_ERROR, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
-#define LOG_D_WARNING(...) if(MLOG_DISABLE != 1) mLog::log(MLOG_WARNING, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
-#define LOG_D_INFO(...) if(MLOG_DISABLE != 1) mLog::log(MLOG_INFO, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
-#define LOG_D_TRACE(...) if(MLOG_DISABLE != 1) mLog::log(MLOG_TRACE, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
+#define LOG_ERROR(output, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_ERROR, output, __VA_ARGS__)
+#define LOG_WARNING(output, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_WARNING, output, __VA_ARGS__)
+#define LOG_INFO(output, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_INFO, output, __VA_ARGS__)
+#define LOG_TRACE(output, ...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_TRACE, output, __VA_ARGS__)
+
+#define LOG_D_ERROR(...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_ERROR, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
+#define LOG_D_WARNING(...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_WARNING, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
+#define LOG_D_INFO(...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_INFO, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
+#define LOG_D_TRACE(...) if(MLOG_DISABLE != 1) mLog::Instance()->log(MLOG_TRACE, MLOG_DEFAULT_ALIAS, __VA_ARGS__)
 
 #endif // MLOG_H
 
