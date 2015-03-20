@@ -6,7 +6,7 @@ int main()
 {
     std::cout << "Hello world!" << std::endl;
 
-    mLog::log("bla: ", 5.324, " ", 9, " dfasfasf\n");
+    mLog::log(1, "bla: ", 5.324, " ", 9, " dfasfasf");
 
     return 0;
 }
