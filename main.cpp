@@ -5,6 +5,7 @@
 #define MLOG_DISABLE 0
 
 int main(){
+	mLog::setOutputFile("log.txt", MLOG_DEFAULT_ALIAS);
 
 	LOG(MLOG_INFO, "default", "begin: ", 5.324, " ", 9, " dfasfasf", " end");
 	LOG_D(MLOG_ERROR, "begin: ", 666, " afasf", " end");
