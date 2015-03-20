@@ -2,12 +2,16 @@
 
 #include "src/mlog.h"
 
+#define MLOG_DISABLE 0
+
 int main(){
 
-	mLog::log(MLOG_INFO, "bla: ", 5.324, " ", 9, " dfasfasf");
-	mLog::log(MLOG_ERROR, "huehuehue ", 666, " afasf");
-	mLog::log(MLOG_ERROR, "huehuehue ", 666);
-	mLog::log(MLOG_ERROR, "huehuehue ");
+	LOG(MLOG_INFO, "default", "begin: ", 5.324, " ", 9, " dfasfasf", " end");
+	LOG_D(MLOG_ERROR, "begin: ", 666, " afasf", " end");
+	LOG_D(MLOG_TRACE, "begin: ", 666, " end");
+	LOG_D(MLOG_ERROR, "begin: ", " end");
+	LOG_D(MLOG_INFO, "begin: ");
+	LOG_D(MLOG_WARNING, 5);
 
 	return 0;
 }
