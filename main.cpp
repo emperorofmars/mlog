@@ -45,6 +45,7 @@ int main(){
 
 	LOG_F(MLOG_ERROR, "foo.txt", "THIS GOES TO FOO: ", 6876876876, " ihfalfh");
 	LOG_F(MLOG_ERROR, "foo.txt", "KAKAKAKA");
+	LOG_F(MLOG_ERROR, "foo.txt", "KAKAKAKA");
 
 	return 0;
 }

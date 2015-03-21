@@ -97,9 +97,12 @@ private:
 	template<typename T>
 		inline int realLog(int target, int logLevel, int output, T &t);
 
+	inline int realSetOutputFile(const char *path, const char *alias, bool append = true);
+
 	inline int searchOutput(const char *alias);
 	inline int searchFile(const char *path);
 
+	inline std::string printInfo(int info, int logLevel, std::vector<std::string> &posInfo);
 	inline std::string printTimeStamp(int info);
 	inline std::string printLogLevel(int logLevel);
 	inline std::string printEndl();
@@ -114,6 +117,7 @@ private:
 		struct buffer{
 			std::vector<std::string> mMsg;
 			int mTarget;
+			int mLogLevel;
 		};
 		std::vector<std::vector<std::string>> mBuffer;	//use buffer
 		std::vector<int> mBufferLogLevel;
@@ -186,56 +190,8 @@ int mLog::init(const char *defaultFile, bool append){
 int mLog::setOutputFile(const char *path, const char *alias, bool append){
 	if(mInnerMutex.try_lock()) mMutex.lock();
 	int ret = -1;
-	std::string al(alias);
-	if(al == ""){
-		if(mInnerMutex.try_lock()) mMutex.unlock();
-		return ret;
-	}
-	int ia = searchOutput(alias);
-	int ip = searchFile(path);
-	if(ip >= 0 && ip != ia){	//if file already open add alias
-		while((ia = searchOutput(alias)) >= 0){	//delete alias if already exists somwhere else
-			for(unsigned int i = 0; i < mOutput[ia]->mAlias.size(); i++){
-				if(mOutput[ia]->mAlias[i] == al){
-					mOutput[ia]->mAlias.erase(mOutput[ia]->mAlias.begin() + i);
-					break;
-				}
-			}
-		}
-		mOutput[ip]->mAlias.push_back(al);
-	}
-	else if(ia >= 0 && al != ""){	//if alias already exists, open different file
-		mOutput[ia]->mFileName = path;
-		if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
-		else mOutput[ia]->mFile.open(path, std::ofstream::out);
-		if(mOutput[ia]->mFile.is_open()){
-			int tmpLevel = mLogLevelConsole;
-			mLogLevelConsole = -1;
-			std::string msg = printStartedMsg();
-			realLog<std::string>(MLOG_TARGET_ALL, 0, ia, msg);
-			mLogLevelConsole = tmpLevel;
-			ret = 0;
-		}
-	}
-	else{
-		mOutput.push_back(std::shared_ptr<output> (new output));
-		ia = mOutput.size() - 1;
-		if(mOutput[ia] != NULL){
-			mOutput[ia]->mFileName = path;
-			mOutput[ia]->mAlias.push_back(al);
-			if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
-			else mOutput[ia]->mFile.open(path, std::ofstream::out);
-			mOutput[ia]->mLogLevel = MLOG_ERROR_SIZE;
-			if(mOutput[ia]->mFile.is_open()){
-				int tmpLevel = mLogLevelConsole;
-				mLogLevelConsole = -1;
-				std::string msg = printStartedMsg();
-				realLog<std::string>(MLOG_TARGET_ALL, 0, ia, msg);
-				mLogLevelConsole = tmpLevel;
-				ret = 0;
-			}
-		}
-	}
+	if(alias != NULL && path != NULL)
+		ret = realSetOutputFile(path, alias, append);
 	if(mInnerMutex.try_lock()) mMutex.unlock();
 	return ret;
 }
@@ -272,18 +228,7 @@ int mLog::log(int logLevel, const char *alias, std::vector<std::string> posInfo,
 		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
 	}
-
-	std::string info;
-	if(posInfo.size() == 3){
-		info.append(posInfo[0]);
-		info.append(": ");
-		info.append(posInfo[1]);
-		info.append(": ");
-		info.append(posInfo[2]);
-		info.append(": ");
-	}
-
-	realLog(MLOG_TARGET_ALL, logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), info, t, args..., printEndl());
+	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, args..., printEndl());
 
 	mMutex.unlock();
 	return 0;
@@ -299,18 +244,7 @@ int mLog::log(int logLevel, const char *alias, std::vector<std::string> posInfo,
 		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
 	}
-
-	std::string info;
-	if(posInfo.size() == 3){
-		info.append(posInfo[0]);
-		info.append(": ");
-		info.append(posInfo[1]);
-		info.append(": ");
-		info.append(posInfo[2]);
-		info.append(": ");
-	}
-
-	realLog(MLOG_TARGET_ALL, logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), info, t, printEndl());
+	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, printEndl());
 
 	mMutex.unlock();
 	return 0;
@@ -320,40 +254,17 @@ template<typename T, typename... Args>
 int mLog::log_f(int logLevel, const char *path, std::vector<std::string> posInfo, T t, Args... args){
 	mMutex.lock();
 
-	bool newFile = false;
 	int i = searchFile(path);
 	if(i < 0){
-		mOutput.push_back(std::shared_ptr<output>(new output));
-		i = mOutput.size() - 1;
-		mOutput[i]->mFileName = path;
-		mOutput[i]->mFile.open(path);
+		i = realSetOutputFile(path, NULL, false);
 		if(!mOutput[i]->mFile.is_open()) i = -1;
-		else newFile = true;
 	}
 
 	if(!mInited){
 		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
 	}
-	if(newFile){
-		int tmpLevel = mLogLevelConsole;
-		mLogLevelConsole = -1;
-		std::string msg = printStartedMsg();
-		realLog<std::string>(MLOG_TARGET_ALL, 0, i, msg);
-		mLogLevelConsole = tmpLevel;
-	}
-
-	std::string info;
-	if(posInfo.size() == 3){
-		info.append(posInfo[0]);
-		info.append(": ");
-		info.append(posInfo[1]);
-		info.append(": ");
-		info.append(posInfo[2]);
-		info.append(": ");
-	}
-
-	realLog(MLOG_TARGET_ALL, logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), info, t, args..., printEndl());
+	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, args..., printEndl());
 
 	mMutex.unlock();
 	return 0;
@@ -363,40 +274,17 @@ template<typename T>
 int mLog::log_f(int logLevel, const char *path, std::vector<std::string> posInfo, T t){
 	mMutex.lock();
 
-	bool newFile = false;
 	int i = searchFile(path);
 	if(i < 0){
-		mOutput.push_back(std::shared_ptr<output>(new output));
-		i = mOutput.size() - 1;
-		mOutput[i]->mFileName = path;
-		mOutput[i]->mFile.open(path);
+		i = realSetOutputFile(path, NULL, false);
 		if(!mOutput[i]->mFile.is_open()) i = -1;
-		else newFile = true;
 	}
 
 	if(!mInited){
 		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
 	}
-	if(newFile){
-		int tmpLevel = mLogLevelConsole;
-		mLogLevelConsole = -1;
-		std::string msg = printStartedMsg();
-		realLog<std::string>(MLOG_TARGET_ALL, 0, i, msg);
-		mLogLevelConsole = tmpLevel;
-	}
-
-	std::string info;
-	if(posInfo.size() == 3){
-		info.append(posInfo[0]);
-		info.append(": ");
-		info.append(posInfo[1]);
-		info.append(": ");
-		info.append(posInfo[2]);
-		info.append(": ");
-	}
-
-	realLog(MLOG_TARGET_ALL, logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), info, t, printEndl());
+	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, printEndl());
 
 	mMutex.unlock();
 	return 0;
@@ -415,10 +303,10 @@ template<typename T>
 int mLog::realLog(int target, int logLevel, int output, T &t){
 	if(output < 0 || output >= mOutput.size()) return -1;
 	if(mInited){
-		if(MLOG_DISABLE_FILE_LOG != 1 && logLevel <= mLogLevelFile && output >= 0){
+		if(MLOG_DISABLE_FILE_LOG != 1 && (target & MLOG_TARGET_FILE) > 0 && logLevel <= mLogLevelFile && output >= 0){
 			mOutput[output]->mFile << t;
 		}
-		if(MLOG_DISABLE_CONSOLE_LOG != 1 && logLevel <= mLogLevelConsole){
+		if(MLOG_DISABLE_CONSOLE_LOG != 1 && (target & MLOG_TARGET_CONSOLE) > 0 && logLevel <= mLogLevelConsole){
 			std::cerr << t;
 		}
 	}
@@ -435,6 +323,61 @@ int mLog::realLog(int target, int logLevel, int output, T &t){
 }
 
 //############################################################### utility
+
+int mLog::realSetOutputFile(const char *path, const char *alias, bool append){
+	int ret = -1;
+	std::string al;
+	if(alias != NULL) al = alias;
+	int ia = searchOutput(alias);
+	int ip = searchFile(path);
+	if(ip >= 0 && ip != ia){	//if file already open add alias
+		while((ia = searchOutput(alias)) >= 0){	//delete alias if already exists somwhere else
+			for(unsigned int i = 0; i < mOutput[ia]->mAlias.size(); i++){
+				if(mOutput[ia]->mAlias[i] == al){
+					mOutput[ia]->mAlias.erase(mOutput[ia]->mAlias.begin() + i);
+					break;
+				}
+			}
+		}
+		if(al.size() != 0) mOutput[ip]->mAlias.push_back(al);
+		ret = ip;
+	}
+	else if(ia >= 0){	//if alias already exists, open different file
+		mOutput[ia]->mFileName = path;
+		if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
+		else mOutput[ia]->mFile.open(path, std::ofstream::out);
+		if(mOutput[ia]->mFile.is_open()){
+			if(!mInited){
+				mOutput[ia]->mBuffer.push_back(std::vector<std::string>());
+				mOutput[ia]->mBufferLogLevel.push_back(0);
+			}
+			std::string msg = printStartedMsg();
+			realLog<std::string>(MLOG_TARGET_FILE, 0, ia, msg);
+			ret = ia;
+		}
+	}
+	else{
+		mOutput.push_back(std::shared_ptr<output> (new output));
+		ia = mOutput.size() - 1;
+		if(mOutput[ia] != NULL){
+			mOutput[ia]->mFileName = path;
+			mOutput[ia]->mAlias.push_back(al);
+			if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
+			else mOutput[ia]->mFile.open(path, std::ofstream::out);
+			mOutput[ia]->mLogLevel = MLOG_ERROR_SIZE;
+			if(mOutput[ia]->mFile.is_open()){
+				if(!mInited){
+					mOutput[ia]->mBuffer.push_back(std::vector<std::string>());
+					mOutput[ia]->mBufferLogLevel.push_back(0);
+				}
+				std::string msg = printStartedMsg();
+				realLog<std::string>(MLOG_TARGET_FILE, 0, ia, msg);
+				ret = ia;
+			}
+		}
+	}
+	return ret;
+}
 
 int mLog::searchOutput(const char *alias){
 	int res = -1;
@@ -474,6 +417,15 @@ int mLog::searchFile(const char *path){
 		}
 	}
 	return res;
+}
+
+std::string mLog::printInfo(int info, int logLevel, std::vector<std::string> &posInfo){
+	std::stringstream ss;
+	ss << printTimeStamp(info) << printLogLevel(logLevel);
+	if(posInfo.size() == 3){
+		ss << posInfo[0] << ": " << posInfo[1] << ": " << posInfo[2] << ": ";
+	}
+	return ss.str();
 }
 
 std::string mLog::printTimeStamp(int info){
