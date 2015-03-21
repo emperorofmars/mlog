@@ -96,6 +96,7 @@ private:
 	inline std::string printTimeStamp(int info);
 	inline std::string printLogLevel(int logLevel);
 	inline std::string printEndl();
+	inline std::string printStartedMsg();
 
 	struct output{
 		std::string mFileName;
@@ -109,6 +110,8 @@ private:
 	std::vector<std::shared_ptr<output>> mOutput;
 
 	std::mutex mMutex;
+	std::mutex mInnerMutex;
+	bool mInnerLock;
 	int mLogLevelConsole;
 	int mLogLevelFile;
 	int mFormat;
@@ -125,18 +128,9 @@ mLog *mLog::Instance(){
 
 mLog::mLog(){
 	output *tmp = new output;
-	tmp->mLogLevel = MLOG_ERROR_SIZE;
-	mOutput.push_back(std::shared_ptr<output>(tmp));	//log_f output
-
-	tmp = NULL;
-	tmp = new output;
 	tmp->mAlias.push_back(MLOG_DEFAULT_ALIAS);
 	tmp->mLogLevel = MLOG_ERROR_SIZE;
-	std::stringstream ss;
-	ss << "============================================================"
-			<< std::endl << printTimeStamp(MLOG_DATE | MLOG_TIME)
-			<< "Logging Started" << std::endl;
-	tmp->mBuffer.push_back({std::vector<std::string>({ss.str()})});
+	tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
 	tmp->mBufferLogLevel.push_back(0);
 	mOutput.push_back(std::shared_ptr<output>(tmp));	//all other outputs
 
@@ -150,12 +144,15 @@ mLog::~mLog(){
 
 int mLog::init(const char *defaultFile, bool append){
 	mMutex.lock();
+	mInnerMutex.lock();
 	mInited = true;
-
 	setOutputFile(defaultFile, MLOG_DEFAULT_ALIAS, append);
 
 	for(unsigned int i = 0; i < mOutput.size(); i++){
+		bool first = true;
 		for(unsigned int j = 0; j < mOutput[i]->mBuffer.size(); j++){
+			int tmplevel = mLogLevelConsole;
+			if(first) mLogLevelConsole = -1;	//do not print logging started message
 			std::stringstream ss;
 			std::string msg;
 			for(unsigned int k = 0; k < mOutput[i]->mBuffer[j].size(); k++){
@@ -165,21 +162,24 @@ int mLog::init(const char *defaultFile, bool append){
 			mOutput[i]->mBuffer.erase(mOutput[i]->mBuffer.begin() + j);
 			mOutput[i]->mBufferLogLevel.erase(mOutput[i]->mBufferLogLevel.begin() + j);
 			j--;
+			if(first) mLogLevelConsole = tmplevel;
+			first = false;
 		}
 	}
+	mInnerMutex.unlock();
 	mMutex.unlock();
 	return 0;
 }
 
 int mLog::setOutputFile(const char *path, const char *alias, bool append){
-	mMutex.lock();
+	if(mInnerMutex.try_lock()) mMutex.lock();
 	int ret = -1;
 	std::string al(alias);
 	int ia = searchOutput(alias);
 	int ip = searchFile(path);
 	if(ip >= 0){	//if file already open add alias
 		if(ip != ia){
-			while((ia = searchOutput(alias)) >= 0){	//delete alias already exists somwhere else
+			while((ia = searchOutput(alias)) >= 0){	//delete alias if already exists somwhere else
 				for(unsigned int i = 0; i < mOutput[ia]->mAlias.size(); i++){
 					if(mOutput[ip]->mAlias[i] == al){
 						mOutput[ip]->mAlias.erase(mOutput[ip]->mAlias.begin() + i);
@@ -194,7 +194,14 @@ int mLog::setOutputFile(const char *path, const char *alias, bool append){
 		mOutput[ia]->mFileName = path;
 		if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
 		else mOutput[ia]->mFile.open(path, std::ofstream::out);
-		if(mOutput[ia]->mFile.is_open()) ret = 0;
+		if(mOutput[ia]->mFile.is_open()){
+			int tmpLevel = mLogLevelConsole;
+			mLogLevelConsole = -1;
+			std::string msg = printStartedMsg();
+			realLog<std::string>(0, ia, msg);
+			mLogLevelConsole = tmpLevel;
+			ret = 0;
+		}
 	}
 	else{
 		mOutput.push_back(std::shared_ptr<output> (new output));
@@ -205,10 +212,17 @@ int mLog::setOutputFile(const char *path, const char *alias, bool append){
 			if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
 			else mOutput[ia]->mFile.open(path, std::ofstream::out);
 			mOutput[ia]->mLogLevel = MLOG_ERROR_SIZE;
-			if(mOutput[ia]->mFile.is_open()) ret = 0;
+			if(mOutput[ia]->mFile.is_open()){
+				int tmpLevel = mLogLevelConsole;
+				mLogLevelConsole = -1;
+				std::string msg = printStartedMsg();
+				realLog<std::string>(0, ia, msg);
+				mLogLevelConsole = tmpLevel;
+				ret = 0;
+			}
 		}
 	}
-	mMutex.unlock();
+	if(mInnerMutex.try_lock()) mMutex.unlock();
 	return ret;
 }
 
@@ -274,7 +288,11 @@ int mLog::log_f(int logLevel, const char *path, T t, Args... args){
 
 	int i = searchFile(path);
 	if(i < 0){
-		mOutput.push_back(std::shared_ptr<output>(new output));
+		output *tmp = new output;
+		tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
+		tmp->mBufferLogLevel.push_back(0);
+
+		mOutput.push_back(std::shared_ptr<output>(tmp));
 		i = mOutput.size() - 1;
 		mOutput[i]->mFileName = path;
 		mOutput[i]->mFile.open(path);
@@ -297,9 +315,16 @@ int mLog::log_f(int logLevel, const char *path, T t){
 	mMutex.lock();
 
 	int i = searchFile(path);
-	if(i < 0 && mOutput.size() > 0){
-		mOutput[0]->mFile.open(path);
-		if(mOutput[0]->mFile.is_open()) i = 0;
+	if(i < 0){
+		output *tmp = new output;
+		tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
+		tmp->mBufferLogLevel.push_back(0);
+
+		mOutput.push_back(std::shared_ptr<output>(tmp));
+		i = mOutput.size() - 1;
+		mOutput[i]->mFileName = path;
+		mOutput[i]->mFile.open(path);
+		if(!mOutput[i]->mFile.is_open()) i = -1;
 	}
 
 	if(!mInited){
@@ -420,6 +445,14 @@ std::string mLog::printLogLevel(int logLevel){
 std::string mLog::printEndl(){
 	std::stringstream ss;
 	ss << std::endl;
+	return ss.str();
+}
+
+std::string mLog::printStartedMsg(){
+	std::stringstream ss;
+	ss << "=========================================="
+			<< std::endl << printTimeStamp(MLOG_DATE | MLOG_TIME)
+			<< "Logging Started" << std::endl;
 	return ss.str();
 }
 

@@ -20,9 +20,11 @@
 #define MLOG_DISABLE 0
 
 int main(){
+	LOG_F(MLOG_TRACE, "bar.txt", "before ", 6666, " bla");
+	LOG_F(MLOG_TRACE, "bar.txt", "before ", 9999, " bla");
 	LOG_D(MLOG_TRACE, "before");
 
-	LOG_ALL.setLogLevel(2, 2);
+	//LOG_ALL.setLogLevel(2, 2);
 
 	LOG_INIT("log.txt", false);
 
