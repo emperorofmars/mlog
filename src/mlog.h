@@ -288,6 +288,7 @@ template<typename T, typename... Args>
 int mLog::log_f(int logLevel, const char *path, T t, Args... args){
 	mMutex.lock();
 
+	bool newFile = false;
 	int i = searchFile(path);
 	if(i < 0){
 		mOutput.push_back(std::shared_ptr<output>(new output));
@@ -295,24 +296,19 @@ int mLog::log_f(int logLevel, const char *path, T t, Args... args){
 		mOutput[i]->mFileName = path;
 		mOutput[i]->mFile.open(path);
 		if(!mOutput[i]->mFile.is_open()) i = -1;
-		else{
-			if(!mInited){
-				mOutput[i]->mBuffer.push_back(std::vector<std::string>({printStartedMsg()}));
-				mOutput[i]->mBufferLogLevel.push_back(logLevel);
-			}
-			else{
-				int tmpLevel = mLogLevelConsole;
-				mLogLevelConsole = -1;
-				std::string msg = printStartedMsg();
-				realLog<std::string>(0, i, msg);
-				mLogLevelConsole = tmpLevel;
-			}
-		}
+		else newFile = true;
 	}
 
 	if(!mInited){
 		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+	}
+	if(newFile){
+		int tmpLevel = mLogLevelConsole;
+		mLogLevelConsole = -1;
+		std::string msg = printStartedMsg();
+		realLog<std::string>(0, i, msg);
+		mLogLevelConsole = tmpLevel;
 	}
 
 	realLog(logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), t, args..., printEndl());
@@ -325,6 +321,7 @@ template<typename T>
 int mLog::log_f(int logLevel, const char *path, T t){
 	mMutex.lock();
 
+	bool newFile = false;
 	int i = searchFile(path);
 	if(i < 0){
 		mOutput.push_back(std::shared_ptr<output>(new output));
@@ -332,24 +329,19 @@ int mLog::log_f(int logLevel, const char *path, T t){
 		mOutput[i]->mFileName = path;
 		mOutput[i]->mFile.open(path);
 		if(!mOutput[i]->mFile.is_open()) i = -1;
-		else{
-			if(!mInited){
-				mOutput[i]->mBuffer.push_back(std::vector<std::string>({printStartedMsg()}));
-				mOutput[i]->mBufferLogLevel.push_back(logLevel);
-			}
-			else{
-				int tmpLevel = mLogLevelConsole;
-				mLogLevelConsole = -1;
-				std::string msg = printStartedMsg();
-				realLog<std::string>(0, i, msg);
-				mLogLevelConsole = tmpLevel;
-			}
-		}
+		else newFile = true;
 	}
 
 	if(!mInited){
 		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+	}
+	if(newFile){
+		int tmpLevel = mLogLevelConsole;
+		mLogLevelConsole = -1;
+		std::string msg = printStartedMsg();
+		realLog<std::string>(0, i, msg);
+		mLogLevelConsole = tmpLevel;
 	}
 
 	realLog(logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), t, printEndl());
@@ -369,6 +361,7 @@ int mLog::realLog(int logLevel, int output, T t, Args... args){
 
 template<typename T>
 int mLog::realLog(int logLevel, int output, T &t){
+	if(output < 0 || output >= mOutput.size()) return -1;
 	if(mInited){
 		if(MLOG_DISABLE_CONSOLE_LOG != 1 && logLevel <= mLogLevelConsole){
 			std::cerr << t;
@@ -380,10 +373,10 @@ int mLog::realLog(int logLevel, int output, T &t){
 	else{
 		std::stringstream ss;
 		ss << t;
-		unsigned int i;
-		i = mOutput[output]->mBuffer.size();
+		unsigned int i = mOutput[output]->mBuffer.size();
 		if(i > 0){
 			mOutput[output]->mBuffer[i - 1].push_back(ss.str());
+			mOutput[output]->mBufferLogLevel.push_back(logLevel);
 		}
 	}
 	return 0;
