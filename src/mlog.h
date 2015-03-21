@@ -120,8 +120,8 @@ private:
 			int mTarget;
 			int mLogLevel;
 		};
-		std::vector<std::vector<std::string>> mBuffer;	//use buffer
-		std::vector<int> mBufferLogLevel;
+		std::vector<buffer> mBuffer;
+		//std::vector<int> mBufferLogLevel;
 	};
 	std::vector<std::shared_ptr<output>> mOutput;
 
@@ -148,7 +148,8 @@ mLog::mLog(){
 	output *tmp = new output;
 	tmp->mAlias.push_back(MLOG_DEFAULT_ALIAS);
 	tmp->mLogLevel = MLOG_ERROR_SIZE;
-	tmp->mBufferLogLevel.push_back(0);
+	tmp->mBuffer.push_back(output::buffer());
+	//tmp->mBufferLogLevel.push_back(0);
 	mOutput.push_back(std::shared_ptr<output>(tmp));	//all other outputs
 
 	mLogLevelConsole = MLOG_ERROR_SIZE;
@@ -168,21 +169,15 @@ int mLog::init(const char *defaultFile, bool append){
 	setOutputFile(defaultFile, MLOG_DEFAULT_ALIAS, append);
 
 	for(unsigned int i = 0; i < mOutput.size(); i++){
-		bool first = true;
 		for(unsigned int j = 0; j < mOutput[i]->mBuffer.size(); j++){
-			int tmplevel = mLogLevelConsole;
-			if(first) mLogLevelConsole = -1;	//do not print logging started message
 			std::stringstream ss;
 			std::string msg;
-			for(unsigned int k = 0; k < mOutput[i]->mBuffer[j].size(); k++){
-				msg = mOutput[i]->mBuffer[j][k];
-				realLog<std::string>(MLOG_TARGET_ALL, mOutput[i]->mBufferLogLevel[j], i, msg);
+			for(unsigned int k = 0; k < mOutput[i]->mBuffer[j].mMsg.size(); k++){
+				msg = mOutput[i]->mBuffer[j].mMsg[k];
+				realLog<std::string>(mOutput[i]->mBuffer[j].mTarget, mOutput[i]->mBuffer[j].mLogLevel, i, msg);
 			}
 			mOutput[i]->mBuffer.erase(mOutput[i]->mBuffer.begin() + j);
-			mOutput[i]->mBufferLogLevel.erase(mOutput[i]->mBufferLogLevel.begin() + j);
 			j--;
-			if(first) mLogLevelConsole = tmplevel;
-			first = false;
 		}
 	}
 	mInnerMutex.unlock();
@@ -228,8 +223,9 @@ int mLog::log(int logLevel, const char *alias, std::vector<std::string> posInfo,
 	int i = searchOutput(alias);
 
 	if(!mInited){
-		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
-		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+		mOutput[i]->mBuffer.push_back(output::buffer());
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mLogLevel = logLevel;
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mTarget = MLOG_TARGET_ALL;
 	}
 	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, args..., printEndl());
 
@@ -244,8 +240,9 @@ int mLog::log(int logLevel, const char *alias, std::vector<std::string> posInfo,
 	int i = searchOutput(alias);
 
 	if(!mInited){
-		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
-		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+		mOutput[i]->mBuffer.push_back(output::buffer());
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mLogLevel = logLevel;
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mTarget = MLOG_TARGET_ALL;
 	}
 	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, printEndl());
 
@@ -264,8 +261,9 @@ int mLog::log_f(int logLevel, const char *path, std::vector<std::string> posInfo
 	}
 
 	if(!mInited){
-		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
-		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+		mOutput[i]->mBuffer.push_back(output::buffer());
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mLogLevel = logLevel;
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mTarget = MLOG_TARGET_ALL;
 	}
 	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, args..., printEndl());
 
@@ -284,8 +282,9 @@ int mLog::log_f(int logLevel, const char *path, std::vector<std::string> posInfo
 	}
 
 	if(!mInited){
-		mOutput[i]->mBuffer.push_back(std::vector<std::string>());
-		mOutput[i]->mBufferLogLevel.push_back(logLevel);
+		mOutput[i]->mBuffer.push_back(output::buffer());
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mLogLevel = logLevel;
+		mOutput[i]->mBuffer[mOutput[i]->mBuffer.size() - 1].mTarget = MLOG_TARGET_ALL;
 	}
 	realLog(MLOG_TARGET_ALL, logLevel, i, printInfo(mFormat, logLevel, posInfo), t, printEndl());
 
@@ -318,8 +317,8 @@ int mLog::realLog(int target, int logLevel, int output, T &t){
 		ss << t;
 		unsigned int i = mOutput[output]->mBuffer.size();
 		if(i > 0){
-			mOutput[output]->mBuffer[i - 1].push_back(ss.str());
-			mOutput[output]->mBufferLogLevel.push_back(logLevel);
+			mOutput[output]->mBuffer[i - 1].mMsg.push_back(ss.str());
+			mOutput[output]->mBuffer[i - 1].mLogLevel = logLevel;
 		}
 	}
 	return 0;
@@ -351,8 +350,9 @@ int mLog::realSetOutputFile(const char *path, const char *alias, bool append){
 		else mOutput[ia]->mFile.open(path, std::ofstream::out);
 		if(mOutput[ia]->mFile.is_open()){
 			if(!mInited){
-				mOutput[ia]->mBuffer.push_back(std::vector<std::string>());
-				mOutput[ia]->mBufferLogLevel.push_back(0);
+				mOutput[ia]->mBuffer.push_back(output::buffer());
+				mOutput[ia]->mBuffer[mOutput[ia]->mBuffer.size() - 1].mLogLevel = 0;
+				mOutput[ia]->mBuffer[mOutput[ia]->mBuffer.size() - 1].mTarget = MLOG_TARGET_FILE;
 			}
 			std::string msg = printStartedMsg();
 			realLog<std::string>(MLOG_TARGET_FILE, 0, ia, msg);
@@ -370,8 +370,9 @@ int mLog::realSetOutputFile(const char *path, const char *alias, bool append){
 			mOutput[ia]->mLogLevel = MLOG_ERROR_SIZE;
 			if(mOutput[ia]->mFile.is_open()){
 				if(!mInited){
-					mOutput[ia]->mBuffer.push_back(std::vector<std::string>());
-					mOutput[ia]->mBufferLogLevel.push_back(0);
+					mOutput[ia]->mBuffer.push_back(output::buffer());
+					mOutput[ia]->mBuffer[mOutput[ia]->mBuffer.size() - 1].mLogLevel = 0;
+					mOutput[ia]->mBuffer[mOutput[ia]->mBuffer.size() - 1].mTarget = MLOG_TARGET_FILE;
 				}
 				std::string msg = printStartedMsg();
 				realLog<std::string>(MLOG_TARGET_FILE, 0, ia, msg);
