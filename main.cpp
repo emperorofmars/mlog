@@ -7,15 +7,18 @@
 int main(){
 	LOG_D(MLOG_TRACE, "before");
 
-	LOG_ALL.setLogLevel(1, 1);
+	LOG_ALL.setLogLevel(2, 2);
 
 	LOG_INIT("log.txt", false);
+
+	LOG_ALL.setOutputFile("bla.txt", "bla");
+	LOG_ALL.setOutputFile("bla.txt", "xxx");
 
 	LOG(MLOG_INFO, "default", "begin: ", 5.324, " ", 9, " dfasfasf", " end");
 	LOG_D(MLOG_ERROR, "begin: ", 666, " afasf", " end");
 	LOG_D(MLOG_TRACE, "begin: ", 666, " end");
-	LOG_D(MLOG_ERROR, "begin: ", " end");
-	LOG_D(MLOG_INFO, "begin: ");
+	LOG(MLOG_ERROR, "bla", "begin: ", " TO BLA end");
+	LOG(MLOG_INFO, "xxx", "begin: TO XXX");
 	LOG_D(MLOG_WARNING, 5);
 
 	mLog::Instance()->log(MLOG_INFO, MLOG_DEFAULT_ALIAS, "begin: ", 5.324, " ", 9, " dfasfasf", " end");

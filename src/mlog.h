@@ -79,6 +79,7 @@ private:
 
     std::string printTimeStamp(int info);
     std::string printLogLevel(int logLevel);
+    std::string printEndl();
 
 	struct output{
 		std::string mFileName;
@@ -165,8 +166,8 @@ int mLog::setOutputFile(const char *path, const char *alias, bool append){
 		if(ip != ia){
 			while((ia = searchOutput(alias)) >= 0){	//delete alias already exists somwhere else
 				for(unsigned int i = 0; i < mOutput[ia]->mAlias.size(); i++){
-					if(mOutput[ia]->mAlias[i] == al){
-						mOutput[ia]->mAlias.erase(mOutput[ia]->mAlias.begin() + i);
+					if(mOutput[ip]->mAlias[i] == al){
+						mOutput[ip]->mAlias.erase(mOutput[ip]->mAlias.begin() + i);
 						break;
 					}
 				}
@@ -229,19 +230,7 @@ int mLog::log(int logLevel, const char *alias, T t, Args... args){
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
 	}
 
-	std::stringstream ss;
-	std::string msg;
-	ss << printTimeStamp(mFormat) << printLogLevel(logLevel);
-	msg = ss.str();
-	realLog<std::string> (logLevel, i, msg);
-
-	realLog(logLevel, i, t);
-	realLog(logLevel, i, args...);
-
-	ss.str("");
-	ss << std::endl;
-	msg = ss.str();
-	realLog<std::string> (logLevel, i, msg);
+	realLog(logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), t, args..., printEndl());
 
 	mMutex.unlock();
 	return 0;
@@ -258,18 +247,7 @@ int mLog::log(int logLevel, const char *alias, T t){
 		mOutput[i]->mBufferLogLevel.push_back(logLevel);
 	}
 
-	std::stringstream ss;
-	std::string msg;
-	ss << printTimeStamp(mFormat) << printLogLevel(logLevel);
-	msg = ss.str();
-	realLog<std::string> (logLevel, i, msg);
-
-	realLog(logLevel, i, t);
-
-	ss.str("");
-	ss << std::endl;
-	msg = ss.str();
-	realLog<std::string> (logLevel, i, msg);
+	realLog(logLevel, i, printTimeStamp(mFormat), printLogLevel(logLevel), t, printEndl());
 
 	mMutex.unlock();
 	return 0;
@@ -319,12 +297,12 @@ int mLog::searchOutput(const char *alias){
 			i--;
 		}
 		for(unsigned int j = 0; j < mOutput[i]->mAlias.size(); j++){
-			if(mOutput[i]->mAlias[i] == al){
+			if(mOutput[i]->mAlias[j] == al){
 				res = i;
 				break;
 			}
 		}
-		if(i >= 0) break;
+		if(res >= 0) break;
 	}
 	return res;
 }
@@ -376,6 +354,12 @@ std::string mLog::printLogLevel(int logLevel){
 		case MLOG_INFO: 	s.append("INFO    : "); break;
 	}
 	return s;
+}
+
+std::string mLog::printEndl(){
+	std::stringstream ss;
+	ss << std::endl;
+	return ss.str();
 }
 
 //############################################################### macros
