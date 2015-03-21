@@ -274,7 +274,6 @@ int mLog::log_f(int logLevel, const char *path, T t, Args... args){
 
 	int i = searchFile(path);
 	if(i < 0){
-		std::cerr << "NEWFILE" << std::endl;
 		mOutput.push_back(std::shared_ptr<output>(new output));
 		i = mOutput.size() - 1;
 		mOutput[i]->mFileName = path;
