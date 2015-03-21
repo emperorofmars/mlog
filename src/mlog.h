@@ -1,8 +1,17 @@
 /*
-**	Author:		Martin Schwarz
-**	Name:		mlog.h
-**	Project:	Mars Logging
-**	Compile:	include in other project
+** Copyright (C) 2015 Martin Schwarz - All Rights Reserved
+** You may use, distribute and modify this code under the
+** terms of the MIT license.
+**
+** You should have received a copy of the MIT license with
+** this file. If not, please write to: martin.schwarz10@gmail.com
+*/
+
+/*
+** Author:	Martin Schwarz
+** File:	mlog.h
+** Project:	Mars Logging
+** Compile:	include in other project
 */
 
 #ifndef MLOG_H
@@ -77,9 +86,9 @@ private:
 	int searchOutput(const char *alias);
 	int searchFile(const char *path);
 
-    std::string printTimeStamp(int info);
-    std::string printLogLevel(int logLevel);
-    std::string printEndl();
+	std::string printTimeStamp(int info);
+	std::string printLogLevel(int logLevel);
+	std::string printEndl();
 
 	struct output{
 		std::string mFileName;
