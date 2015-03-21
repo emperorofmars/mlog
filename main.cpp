@@ -22,13 +22,14 @@
 int main(){
 	LOG_F(MLOG_TRACE, "bar.txt", "before ", 6666, " bla");
 	LOG_F(MLOG_TRACE, "bar.txt", "before ", 9999, " bla");
+	LOG_F(MLOG_TRACE, "log.txt", "before ", 9999, " bla");
 	LOG_D(MLOG_TRACE, "before");
 
 	//LOG_ALL.setLogLevel(2, 2);
 
 	LOG_INIT("log.txt", false);
 
-	LOG_ALL.setOutputFile("bla.txt", "bla");
+	LOG_ALL.setOutputFile("bla.txt", "bla", false);
 	LOG_ALL.setOutputFile("bla.txt", "xxx");
 
 	LOG(MLOG_INFO, "default", "begin: ", 5.324, " ", 9, " dfasfasf", " end");

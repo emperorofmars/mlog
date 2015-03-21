@@ -130,7 +130,7 @@ mLog::mLog(){
 	output *tmp = new output;
 	tmp->mAlias.push_back(MLOG_DEFAULT_ALIAS);
 	tmp->mLogLevel = MLOG_ERROR_SIZE;
-	tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
+	//tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
 	tmp->mBufferLogLevel.push_back(0);
 	mOutput.push_back(std::shared_ptr<output>(tmp));	//all other outputs
 
@@ -175,22 +175,24 @@ int mLog::setOutputFile(const char *path, const char *alias, bool append){
 	if(mInnerMutex.try_lock()) mMutex.lock();
 	int ret = -1;
 	std::string al(alias);
+	if(al == ""){
+		if(mInnerMutex.try_lock()) mMutex.unlock();
+		return ret;
+	}
 	int ia = searchOutput(alias);
 	int ip = searchFile(path);
-	if(ip >= 0){	//if file already open add alias
-		if(ip != ia){
-			while((ia = searchOutput(alias)) >= 0){	//delete alias if already exists somwhere else
-				for(unsigned int i = 0; i < mOutput[ia]->mAlias.size(); i++){
-					if(mOutput[ip]->mAlias[i] == al){
-						mOutput[ip]->mAlias.erase(mOutput[ip]->mAlias.begin() + i);
-						break;
-					}
+	if(ip >= 0 && ip != ia){	//if file already open add alias
+		while((ia = searchOutput(alias)) >= 0){	//delete alias if already exists somwhere else
+			for(unsigned int i = 0; i < mOutput[ia]->mAlias.size(); i++){
+				if(mOutput[ia]->mAlias[i] == al){
+					mOutput[ia]->mAlias.erase(mOutput[ia]->mAlias.begin() + i);
+					break;
 				}
 			}
-			mOutput[ip]->mAlias.push_back(al);
 		}
+		mOutput[ip]->mAlias.push_back(al);
 	}
-	else if(ia >= 0){	//if alias already exists, open different file
+	else if(ia >= 0 && al != ""){	//if alias already exists, open different file
 		mOutput[ia]->mFileName = path;
 		if(append) mOutput[ia]->mFile.open(path, std::ofstream::out | std::ofstream::app);
 		else mOutput[ia]->mFile.open(path, std::ofstream::out);
@@ -288,15 +290,24 @@ int mLog::log_f(int logLevel, const char *path, T t, Args... args){
 
 	int i = searchFile(path);
 	if(i < 0){
-		output *tmp = new output;
-		tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
-		tmp->mBufferLogLevel.push_back(0);
-
-		mOutput.push_back(std::shared_ptr<output>(tmp));
+		mOutput.push_back(std::shared_ptr<output>(new output));
 		i = mOutput.size() - 1;
 		mOutput[i]->mFileName = path;
 		mOutput[i]->mFile.open(path);
 		if(!mOutput[i]->mFile.is_open()) i = -1;
+		else{
+			if(!mInited){
+				mOutput[i]->mBuffer.push_back(std::vector<std::string>({printStartedMsg()}));
+				mOutput[i]->mBufferLogLevel.push_back(logLevel);
+			}
+			else{
+				int tmpLevel = mLogLevelConsole;
+				mLogLevelConsole = -1;
+				std::string msg = printStartedMsg();
+				realLog<std::string>(0, i, msg);
+				mLogLevelConsole = tmpLevel;
+			}
+		}
 	}
 
 	if(!mInited){
@@ -316,15 +327,24 @@ int mLog::log_f(int logLevel, const char *path, T t){
 
 	int i = searchFile(path);
 	if(i < 0){
-		output *tmp = new output;
-		tmp->mBuffer.push_back({std::vector<std::string>({printStartedMsg()})});
-		tmp->mBufferLogLevel.push_back(0);
-
-		mOutput.push_back(std::shared_ptr<output>(tmp));
+		mOutput.push_back(std::shared_ptr<output>(new output));
 		i = mOutput.size() - 1;
 		mOutput[i]->mFileName = path;
 		mOutput[i]->mFile.open(path);
 		if(!mOutput[i]->mFile.is_open()) i = -1;
+		else{
+			if(!mInited){
+				mOutput[i]->mBuffer.push_back(std::vector<std::string>({printStartedMsg()}));
+				mOutput[i]->mBufferLogLevel.push_back(logLevel);
+			}
+			else{
+				int tmpLevel = mLogLevelConsole;
+				mLogLevelConsole = -1;
+				std::string msg = printStartedMsg();
+				realLog<std::string>(0, i, msg);
+				mLogLevelConsole = tmpLevel;
+			}
+		}
 	}
 
 	if(!mInited){
