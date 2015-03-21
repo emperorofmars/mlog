@@ -55,12 +55,13 @@ enum logInfo{
 	MLOG_FILE = 0b00000100,
 	MLOG_FUNC = 0b00001000,
 	MLOG_LINE = 0b00010000,
+	MLOG_INFO_ALL = 0b11111111,
 };
 
 enum logTarget{
 	MLOG_TARGET_FILE = 0b0001,
 	MLOG_TARGET_CONSOLE = 0b0010,
-	MLOG_TARGET_ALL = 0b0011,
+	MLOG_TARGET_ALL = 0b1111,
 };
 
 //############################################################### singleton logging class
@@ -152,7 +153,9 @@ mLog::mLog(){
 
 	mLogLevelConsole = MLOG_ERROR_SIZE;
 	mLogLevelFile = MLOG_ERROR_SIZE;
-	mFormat = MLOG_DATE | MLOG_TIME | MLOG_FILE | MLOG_LINE;
+	mFormat = MLOG_INFO_ALL;
+	mFormatFile = MLOG_INFO_ALL;
+	mFormatConsole = MLOG_TIME | MLOG_FUNC | MLOG_LINE;
 }
 
 mLog::~mLog(){
@@ -423,7 +426,9 @@ std::string mLog::printInfo(int info, int logLevel, std::vector<std::string> &po
 	std::stringstream ss;
 	ss << printTimeStamp(info) << printLogLevel(logLevel);
 	if(posInfo.size() == 3){
-		ss << posInfo[0] << ": " << posInfo[1] << ": " << posInfo[2] << ": ";
+		if((info & MLOG_FILE) > 0) ss << posInfo[0] << ": ";
+		if((info & MLOG_FUNC) > 0) ss << posInfo[1] << ": ";
+		if((info & MLOG_LINE) > 0) ss << posInfo[2] << ": ";
 	}
 	return ss.str();
 }
@@ -493,7 +498,6 @@ std::string mLog::printStartedMsg(){
 
 #undef MLOG_PRINT_POSITION
 
-//#define MLOG_PRINT_POSITION __FILE__, ": ", __func__, ": ", __LINE__, " : "
 #define MLOG_PRINT_POSITION std::vector<std::string> ({__FILE__, __func__, std::to_string(__LINE__)})
 
 #define LOG_ALL (*mLog::Instance())

@@ -35,7 +35,7 @@ int main(){
 	LOG(MLOG_INFO, "default", "begin: ", 5.324, " ", 9, " dfasfasf", " end");
 	LOG_D(MLOG_ERROR, "begin: ", 666, " afasf", " end");
 	LOG_D(MLOG_TRACE, "begin: ", 666, " end");
-	LOG(MLOG_ERROR, "bla", "begin: ", " TO BLA end");
+	LOG(MLOG_ERROR, "bla", "begin: ", 666, " TO BLA end");
 	LOG(MLOG_INFO, "xxx", "begin: TO XXX");
 	LOG_D(MLOG_WARNING, 5);
 
