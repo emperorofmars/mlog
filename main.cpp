@@ -27,6 +27,8 @@ int main(){
 
 	//LOG_ALL.setLogLevel(2, 2);
 
+	//LOG_ALL.setFormatConsole(MLOG_DATE);
+
 	LOG_INIT("log.txt", false);
 
 	LOG_ALL.setOutputFile("bla.txt", "bla", false);
